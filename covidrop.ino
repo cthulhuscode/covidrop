@@ -7,9 +7,15 @@
 #include "FirebaseESP32.h"
 #include "time.h"
 #include <analogWrite.h>
+// Display Oled
+#include <SPI.h>
+#include <Wire.h> 
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
 
+Adafruit_SSD1306 display = Adafruit_SSD1306(128, 32, &Wire);
 
-LiquidCrystal_I2C lcd(0x27,16,2);  // set the LCD address to 0x27 for a 16 chars and 2 line display
+//LiquidCrystal_I2C lcd(0x27,16,2);  // set the LCD address to 0x27 for a 16 chars and 2 line display
 Adafruit_MLX90614 mlx = Adafruit_MLX90614();
 
 // Configure the time
@@ -43,8 +49,8 @@ TaskHandle_t Task1, Task2, Task3;
 SemaphoreHandle_t baton; // Sync tasks 
 
 // Wifi Credentials
-#define WIFI_SSID "ARRIS-96A6"
-#define WIFI_PASSWORD "109397DA96A6"
+#define WIFI_SSID "msi"
+#define WIFI_PASSWORD "hola1234"
 
 // Credentials Firebase Project
 #define FIREBASE_HOST "https://tesis-covidrop-default-rtdb.firebaseio.com"
@@ -64,19 +70,25 @@ void setup() {
   Serial.begin(9600);
   while (!Serial);
 
-  Serial.println("Adafruit MLX90614 test");
+  // Init display
+  display.begin(SSD1306_SWITCHCAPVCC, 0x3C); // Otra direccion es la 0x3D
+  display.clearDisplay();
+  display.setTextColor(SSD1306_WHITE);
 
-  if (!mlx.begin()) {
+  Serial.println("Adafruit MLX90614 test");
+  printOledDisplay(1, "Adafruit MLX90614 test", 0,0);
+
+  while (!mlx.begin()) {
     Serial.println("Error connecting to MLX sensor. Check wiring.");
-    while (1);
+    display.clearDisplay();
+    printOledDisplay(1, "Error connecting to MLX sensor. Check wiring.", 0,0);
   };
 
   Serial.print("Emissivity = "); Serial.println(mlx.readEmissivity());
   Serial.println("================================================");
 
-  lcd.init();                     
-  lcd.init(); 
-  lcd.backlight();
+  //lcd.init();                     
+  //lcd.backlight();
 
   //Conf HCSR04 1
   pinMode(trigPin1, OUTPUT);
@@ -95,12 +107,16 @@ void setup() {
   /* Configuring WiFi connection */
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   Serial.print("Connecting to WiFi");
+  printOledDisplay(1, "Connecting to WiFi", 0,8);
+
   while(WiFi.status() != WL_CONNECTED){
     Serial.print(".");
+    printOledDisplay(1, "...", 0,16);
     delay(300);
   }
   Serial.println("");
   Serial.println("WiFi Connected!");
+  printOledDisplay(1, "WiFi Connected!", 0,24);
 
   /* Firebase connection */
   Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
@@ -133,11 +149,15 @@ void setup() {
     0
   );
   delay(500);
+
+  display.clearDisplay();         // Borra la pantalla
 }
 
 void loop() {
-  printDistanceInDisplay(distance1, 0);
-  printDistanceInDisplay(distance2, 1);
+  //printDistanceInDisplay(distance1, 0);
+  //printDistanceInDisplay(distance2, 1);
+  printDistanceInOledDisplay(distance1, 0);
+  printDistanceInOledDisplay(distance2, 16);
 
   ambientTemp = mlx.readAmbientTempC();
   Serial.print("Ambient= "); Serial.print(ambientTemp); Serial.println("°C");   
@@ -147,8 +167,9 @@ void loop() {
   
   if(!isnan(ambientTemp)){
    convAmbTemp = floor(ambientTemp);
-   printDisplay(0,0, (String)convAmbTemp);
-   printDisplay(2,0,"C"); 
+   //printDisplay(0,0, (String)convAmbTemp);
+   //printDisplay(2,0,"C"); 
+   printOledDisplay(4, (String)convAmbTemp, 0,0);
   }  
   
 
@@ -159,9 +180,11 @@ void loop() {
 
    if(!isnan(objectTemp)){
     convObjTemp = floor(objectTemp);
-    printDisplay(0,0, (String)convObjTemp);
-    printDisplay(2,0,"C");
-    
+    //printDisplay(0,0, (String)convObjTemp);
+    //printDisplay(2,0,"C");
+    display.clearDisplay();
+    String text = (String)convObjTemp + "C";
+    printOledDisplay(4, text, 35,5);
     pushValuesToFirebase();
    }   
    analogWrite(buzzer, 150);
@@ -172,9 +195,11 @@ void loop() {
   }    
 
   delay(500);
-  lcd.clear();
-}
+  //lcd.clear();
+  display.clearDisplay();         // Borra la pantalla
 
+}
+/*
 void printDisplay(int x, int y, String value){
     lcd.setCursor(x,y);
     lcd.print(value);       
@@ -189,7 +214,7 @@ void printDistanceInDisplay(float distance, int y){
   printDisplay(11,y, (String)d);
   printDisplay(cm,y,"cm"); 
 }
-
+*/
 void distanceSensor1(){
    // Clears the trigPin1
   digitalWrite(trigPin1, LOW);
@@ -228,9 +253,9 @@ void codeForTask1( void * parameter ){
     distance1= duration1*0.034/2;
     
     // Prints the distance1 on the Serial Monitor
-    Serial.print("Distance 1: ");
+    /*Serial.print("Distance 1: ");
     Serial.print(distance1);
-    Serial.println(" cm");  
+    Serial.println(" cm");  */
 
     delay(100);
     
@@ -259,16 +284,22 @@ void codeForTask2( void * parameter ){
     distance2 = duration2*0.034/2;
     
     // Prints the distance2 on the Serial Monitor
-    Serial.print("Distance 2: ");
+    /*Serial.print("Distance 2: ");
     Serial.print(distance2);
     Serial.println(" cm");  
+    */
 
     // Distance sensor 2 - Dispense gel
     if(distance2 <= 20){
+     /*
      digitalWrite(waterPump, HIGH);
-     delay(2000);
+     delay(1000);
+     digitalWrite(waterPump, LOW);    
+     */
+    analogWrite(waterPump, 150);
+    delay(1000);
+    analogWrite(waterPump, 0);
     } 
-    digitalWrite(waterPump, LOW);    
 
     delay(100);    
 
@@ -315,4 +346,21 @@ String getDateTime(){
   dateAndTime.concat(tiempo);
   
   return dateAndTime;
+}
+
+void printOledDisplay(int textSize, String text, int x, int y){
+    display.setTextSize(textSize);         // Tamaño de la fuente del texto 1 - 2 - 3 - 4 - 5
+    display.setCursor(x,y);       // (X,Y) . (Horizontal, Vertical)
+    display.print(text);  // texto a mostrar / si es variable sin comillas
+    display.display();      
+}
+
+void printDistanceInOledDisplay(float distance, int y){
+  int d = distance + 0.5;  
+  int cm = 80; //Ubicar la palabra cm
+    
+  if(d > 99) cm += 20;
+  else if(d > 9) cm += 10;
+  printOledDisplay(2,(String)d, 65,y);
+  printOledDisplay(2,"cm",cm,y); 
 }
